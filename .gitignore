@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+*.egg-info/
+.DS_Store
+
+# generated at runtime - keep the repo clean, these regenerate on demand
+results/runs/*.json
+data/processed/*.parquet
+
+# keep folder structure without committing generated content
+!data/raw/.gitkeep

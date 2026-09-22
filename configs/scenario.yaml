@@ -1,0 +1,34 @@
+routes:
+  - name: R1_coastal_main
+    distance_nm: 500
+    weeks: 4
+    slots_per_week: 2
+    demand_dwt_per_week: 60000
+    fuel_availability: [MDO, VLSFO, LNG]
+  - name: R2_long_haul
+    distance_nm: 800
+    weeks: 4
+    slots_per_week: 2
+    demand_dwt_per_week: 45000
+    fuel_availability: [MDO, VLSFO]
+  - name: R3_short_feeder
+    distance_nm: 350
+    weeks: 4
+    slots_per_week: 2
+    demand_dwt_per_week: 30000
+    fuel_availability: [MDO, VLSFO, LNG, MeOH]
+
+year: 2026
+
+# All prices below are user-editable assumptions (plan Sec 16) - never
+# present these as fact to judges, they drive scenario sensitivity analysis.
+eua_price_usd_per_ton: 80
+fuel_price_usd_per_ton:
+  MDO: 650
+  VLSFO: 600
+  LNG: 550
+  MeOH: 700
+  NH3: 900
+
+w_delay_usd_per_hour: 50
+available_hours_per_week: 168
