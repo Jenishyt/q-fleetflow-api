@@ -22,6 +22,7 @@ import hashlib
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.schemas import (
@@ -32,7 +33,28 @@ from src.models.predict_api import FuelPredictor
 from src.optimizer.encoding import Scenario
 from src.optimizer.qiea import run_qiea
 
-app = FastAPI(title="Q-FleetFlow API", version="0.1.0")
+_predictor: FuelPredictor | None = None
+
+
+def get_predictor() -> FuelPredictor:
+    global _predictor
+    if _predictor is None:
+        _predictor = FuelPredictor.from_synthetic()
+    return _predictor
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Train the model when the SERVER starts, not on the first user
+    request. Without this, whoever's browser triggers the first click
+    after a cold start (or after Render's free tier sleeps) eats the full
+    data-generation + LightGBM-training cost live, on top of Render's own
+    wake-up delay - two slow things stacking on one unlucky user."""
+    get_predictor()
+    yield
+
+
+app = FastAPI(title="Q-FleetFlow API", version="0.1.0", lifespan=lifespan)
 
 # Permissive CORS for the hackathon demo - the Next.js frontend (Vercel)
 # and this API (Render) are on different origins. Tighten allow_origins
@@ -48,17 +70,6 @@ app.add_middleware(
 _REPO_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
 _RUNS_DIR = os.path.join(_REPO_ROOT, "results", "runs")
 os.makedirs(_RUNS_DIR, exist_ok=True)
-
-# lazy-loaded singleton - training happens once on first request, not on
-# every call (the optimizer's fitness loop needs this to already be hot)
-_predictor: FuelPredictor | None = None
-
-
-def get_predictor() -> FuelPredictor:
-    global _predictor
-    if _predictor is None:
-        _predictor = FuelPredictor.from_synthetic()
-    return _predictor
 
 
 def _to_py(x):
