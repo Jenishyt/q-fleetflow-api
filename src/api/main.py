@@ -19,6 +19,8 @@ import time
 import uuid
 import json
 import hashlib
+import asyncio
+import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -34,23 +36,34 @@ from src.optimizer.encoding import Scenario
 from src.optimizer.qiea import run_qiea
 
 _predictor: FuelPredictor | None = None
+_predictor_lock = threading.Lock()
 
 
 def get_predictor() -> FuelPredictor:
+    """Thread-safe lazy load: if two requests (or a request and the
+    background warmup task) hit this at the same moment, only one
+    actually trains - the other blocks on the lock and reuses the result
+    instead of training a second, wasted copy."""
     global _predictor
     if _predictor is None:
-        _predictor = FuelPredictor.from_synthetic()
+        with _predictor_lock:
+            if _predictor is None:  # re-check inside the lock
+                _predictor = FuelPredictor.from_synthetic()
     return _predictor
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Train the model when the SERVER starts, not on the first user
-    request. Without this, whoever's browser triggers the first click
-    after a cold start (or after Render's free tier sleeps) eats the full
-    data-generation + LightGBM-training cost live, on top of Render's own
-    wake-up delay - two slow things stacking on one unlucky user."""
-    get_predictor()
+    """Kick off predictor training in a background thread WITHOUT blocking
+    startup. An earlier version awaited this directly in lifespan and it
+    broke deployment entirely: Render's port scanner needs the port open
+    within a couple of minutes, training took longer than that on Render's
+    free-tier CPU, so the port never opened and the deploy timed out and
+    failed. Fire-and-forget here instead - the port opens immediately,
+    Render's health check passes right away, and get_predictor()'s lock
+    means whichever request (background warmup or a real user) gets there
+    first does the training; the other just waits on the same result."""
+    asyncio.create_task(asyncio.to_thread(get_predictor))
     yield
 
 
