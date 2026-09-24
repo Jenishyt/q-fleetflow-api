@@ -33,7 +33,16 @@ class FuelPredictor:
         self.models_q = models_q
         self.cols = cols
         self.c_class = c_class
-        self.explainer = explainer
+        self._explainer = explainer  # lazy-built on first SHAP request
+
+    def _get_explainer(self):
+        """TreeSHAP is exact for tree models and needs no background
+        dataset, so this only has to be built once, lazily - the QIEA's
+        hot loop never touches this path since it never requests SHAP."""
+        if self._explainer is None:
+            import shap
+            self._explainer = shap.TreeExplainer(self.model_point)
+        return self._explainer
 
     @classmethod
     def from_synthetic(cls) -> "FuelPredictor":
@@ -58,10 +67,15 @@ class FuelPredictor:
         model_point, models_q, cols = gbm_mod.train_models(train, val)
         return cls(model_point, models_q, cols, c_class)
 
-    def predict_fuel_batch(self, df: pd.DataFrame) -> list[FuelPred]:
+    def predict_fuel_batch(self, df: pd.DataFrame, compute_shap: bool = False) -> list[FuelPred]:
         """df must have columns: vessel_class, speed_kn, draft_ratio,
         wind_kn, wave_hs_m, temp_c, fuel_type. Vectorized - this is what
-        the optimizer's fitness.py calls, budgeted at <50ms per 100 rows."""
+        the optimizer's fitness.py calls, budgeted at <50ms per 100 rows.
+
+        compute_shap defaults to False because it adds real overhead - the
+        QIEA's fitness loop calls this thousands of times per run and must
+        never pay that cost. Only the interactive /predict endpoint (a
+        single row, called once per user action) sets it True."""
         df = df.copy()
         df["speed_sq"] = df["speed_kn"] ** 2
         df["speed_draft"] = df["speed_kn"] * df["draft_ratio"]
@@ -81,24 +95,33 @@ class FuelPredictor:
         q10 = phys * np.exp(r_q10)
         q90 = phys * np.exp(r_q90)
 
+        shap_rows: list[list[tuple[str, float]]] = [[] for _ in range(len(df))]
+        if compute_shap:
+            explainer = self._get_explainer()
+            shap_values = explainer.shap_values(df[self.cols])
+            for i in range(len(df)):
+                pairs = list(zip(self.cols, shap_values[i]))
+                pairs.sort(key=lambda p: abs(p[1]), reverse=True)
+                shap_rows[i] = [(name, float(val)) for name, val in pairs[:3]]
+
         results = []
         for i in range(len(df)):
             results.append(FuelPred(
                 fuel_t_per_day=float(f_hat[i]),
                 q10=float(q10[i]),
                 q90=float(q90[i]),
-                shap_top3=[],  # populated by predict_fuel() single-row path below
+                shap_top3=shap_rows[i],
             ))
         return results
 
     def predict_fuel(self, vessel_class, speed_kn, draft_ratio,
                       wind_kn=0.0, wave_hs_m=0.0, temp_c=25.0,
-                      fuel_type="VLSFO") -> FuelPred:
+                      fuel_type="VLSFO", compute_shap: bool = True) -> FuelPred:
         df = pd.DataFrame([{
             "vessel_class": vessel_class, "speed_kn": speed_kn, "draft_ratio": draft_ratio,
             "wind_kn": wind_kn, "wave_hs_m": wave_hs_m, "temp_c": temp_c, "fuel_type": fuel_type,
         }])
-        return self.predict_fuel_batch(df)[0]
+        return self.predict_fuel_batch(df, compute_shap=compute_shap)[0]
 
 
 if __name__ == "__main__":

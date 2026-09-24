@@ -113,6 +113,7 @@ def predict(req: PredictRequest):
         fuel_t_per_day=_to_py(pred.fuel_t_per_day),
         q10=_to_py(pred.q10),
         q90=_to_py(pred.q90),
+        shap_top3=pred.shap_top3,
     )
 
 

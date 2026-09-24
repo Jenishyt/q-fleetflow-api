@@ -31,4 +31,4 @@ fuel_price_usd_per_ton:
   NH3: 900
 
 w_delay_usd_per_hour: 50
-available_hours_per_week: 168
+available_hours_per_week: 72

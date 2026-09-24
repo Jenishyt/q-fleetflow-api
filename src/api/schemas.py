@@ -21,6 +21,7 @@ class PredictResponse(BaseModel):
     fuel_t_per_day: float
     q10: float
     q90: float
+    shap_top3: list[tuple[str, float]] = []
 
 
 class OptimizeRequest(BaseModel):

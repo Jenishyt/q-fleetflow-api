@@ -1,3 +1,13 @@
+---
+title: Q-FleetFlow API
+emoji: 🚢
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Q-FleetFlow — Quantum-Inspired Fuel Prediction & Green Fleet Optimization
 
 SIH 2026 prototype. This README reflects the ACTUAL state of the code, not
@@ -43,12 +53,12 @@ python3 src/optimizer/baselines.py       # greedy / random / NSGA-II comparison
 
 | Algorithm | Hypervolume (mean +/- std) | Feasibility rate | Best cost found |
 |---|---|---|---|
-| Greedy | 1,177 | 0% | $142,551 |
-| Random search | 2,511 +/- 79 | 80.8% | $109,018 |
-| QIEA | 2,849 +/- 91 | **92.5%** | $92,944 |
-| NSGA-II | **3,564 +/- 54** | 83.8% | **$60,244** |
+| Greedy | 10.7B | 0% | $142,551 |
+| Random search | 21.3B +/- 0.3B | 67.1% | $109,018 |
+| QIEA | 22.7B +/- 0.2B | **86.9%** | $109,755 |
+| NSGA-II | **27.7B +/- 0.4B** | 73.0% | **$61,263** |
 
-QIEA vs random: p=0.002 (significant, QIEA wins). QIEA vs NSGA-II: p=0.002 (significant, NSGA-II wins on hypervolume). QIEA's feasibility-rate advantage is the honest, defensible story - not "QIEA wins on everything."
+QIEA vs random: p=0.002 (significant, QIEA wins). QIEA vs NSGA-II: p=0.002 (significant, NSGA-II wins on hypervolume). QIEA's feasibility-rate advantage is the honest, defensible story - not "QIEA wins on everything." (Re-run after widening `scenario.yaml`'s available_hours_per_week so J3/schedule-risk actually triggers on some plans - previously it was a degenerate always-zero objective.)
 
 ## Honest status — read this before putting anything in a slide
 
