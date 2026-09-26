@@ -46,7 +46,7 @@ python3 src/optimizer/baselines.py       # greedy / random / NSGA-II comparison
 | 2. Prediction | `src/models/gbm.py`, `src/models/predict_api.py` | Done on synthetic data. MAPE 3.33%, R²=0.996, 12.7ms/100-row batch. Quantile coverage 73.4% (target 75-90%, slightly under). |
 | 3. Optimizer | `src/optimizer/{register,gates,encoding,repair,fitness,qiea}.py` | Done. Batched fitness evaluation: full QIEA run ~5-9s (gate <120s, large margin). |
 | 4. Compliance | `src/compliance/{fueleu,ets,cii}.py`, `configs/factors.yaml` | Done. 7/7 tests pass incl. LNG-trap worked example. |
-| 5. Benchmarking | `src/optimizer/baselines.py`, `src/optimizer/benchmark.py` | Done. Full 10-seed x 3-algorithm protocol with Wilcoxon test, `results/benchmark_table.csv`. |
+| 5. Benchmarking | `src/optimizer/baselines.py`, `src/optimizer/benchmark.py` | Done. Full 10-seed x 4-algorithm protocol with Wilcoxon test, `results/benchmark_table.csv`. |
 | 6. API + dashboard | `src/api/{main,schemas}.py`, `src/dashboard/app.py` | Done. FastAPI: 4 endpoints, 5/5 tests pass. Streamlit: 4 tabs, offline-JSON-read mode, headless-tested end to end (Run button -> Pareto explorer -> ledger). |
 
 ## Full benchmark result (10 seeds, real numbers - see results/benchmark_table.csv)
@@ -55,10 +55,11 @@ python3 src/optimizer/baselines.py       # greedy / random / NSGA-II comparison
 |---|---|---|---|
 | Greedy | 10.7B | 0% | $142,551 |
 | Random search | 21.3B +/- 0.3B | 67.1% | $109,018 |
+| Weighted single-objective GA | 20.9B +/- 0.6B | **0%** | $86,902 |
 | QIEA | 22.7B +/- 0.2B | **86.9%** | $109,755 |
 | NSGA-II | **27.7B +/- 0.4B** | 73.0% | **$61,263** |
 
-QIEA vs random: p=0.002 (significant, QIEA wins). QIEA vs NSGA-II: p=0.002 (significant, NSGA-II wins on hypervolume). QIEA's feasibility-rate advantage is the honest, defensible story - not "QIEA wins on everything." (Re-run after widening `scenario.yaml`'s available_hours_per_week so J3/schedule-risk actually triggers on some plans - previously it was a degenerate always-zero objective.)
+QIEA vs random: p=0.002 (significant, QIEA wins). QIEA vs NSGA-II: p=0.002 (significant, NSGA-II wins on hypervolume). QIEA vs weighted GA: p=0.002 (significant, QIEA wins). QIEA's feasibility-rate advantage is the honest, defensible story - not "QIEA wins on everything." The weighted GA result is its own small proof: fixed weights found the 2nd-cheapest plan of any algorithm ($86,902) but was compliant on **zero of 10 seeds** - it structurally cannot discover that paying slightly more buys legality, because collapsing 3 objectives into 1 number throws away the tradeoff curve entirely. That's the actual argument for building a multi-objective optimizer, made with a number instead of an assertion.
 
 ## Honest status — read this before putting anything in a slide
 
@@ -139,9 +140,5 @@ to talk to the optimizer.
 ## Next steps (not yet built)
 
 1. Run `kaggle_loader.py` against the REAL downloaded CSV, fix `COLUMN_MAP` to match its actual headers, re-check the MAPE gate on real data (expect worse than 3.33% - that's normal)
-2. Weighted single-objective GA baseline (plan's 4th comparator - not built)
-3. SHAP top-3 wiring into `/predict`'s response (currently always empty)
-4. Background-thread + progress bar for longer optimizer runs in the dashboard
-5. PDF export for the decision memo (CSV export works; PDF does not exist yet)
-6. Widen `scenario.yaml` so J3 (schedule risk) actually triggers sometimes
-7. Possible QIEA tuning to close the gap with NSGA-II on raw hypervolume
+2. PDF export for the decision memo (CSV export works; PDF does not exist yet)
+3. Possible QIEA tuning to close the gap with NSGA-II on raw hypervolume

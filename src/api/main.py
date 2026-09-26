@@ -210,3 +210,81 @@ def get_run(run_id: str):
             for pid, p in run_record["plans"].items()
         ],
     }
+
+
+@app.get("/ports")
+def list_ports():
+    from src.data.ports import PORTS
+    return {"ports": PORTS}
+
+
+@app.get("/fleet")
+def list_fleet():
+    from src.data.fleet_registry import load_fleet
+    return {"vessels": load_fleet()}
+
+
+@app.post("/fleet")
+def add_vessel(req: dict):
+    from src.data.fleet_registry import register_vessel
+    name = req.get("name")
+    vessel_class = req.get("vessel_class")
+    fuel_type = req.get("fuel_type", "VLSFO")
+    if not name or not vessel_class:
+        raise HTTPException(422, "name and vessel_class are required")
+    try:
+        vessel = register_vessel(name, vessel_class, fuel_type)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return vessel
+
+
+@app.get("/routes")
+def list_routes():
+    """Route geometry for the map - origin/destination ports resolved to
+    coordinates, plus the scenario's actual demand/distance/fuel fields.
+    Ports not found in the reference database are dropped from geometry
+    (not silently placed at 0,0) so the map never shows a fake location."""
+    from src.data.ports import PORTS_BY_NAME
+
+    scenario_path = os.path.join(_REPO_ROOT, "configs", "scenario.yaml")
+    scenario = Scenario.from_yaml(scenario_path)
+
+    routes_out = []
+    for r in scenario.routes:
+        origin = PORTS_BY_NAME.get(r.origin_port) if r.origin_port else None
+        dest = PORTS_BY_NAME.get(r.destination_port) if r.destination_port else None
+        routes_out.append({
+            "name": r.name,
+            "distance_nm": r.distance_nm,
+            "demand_dwt_per_week": r.demand_dwt_per_week,
+            "fuel_availability": r.fuel_availability,
+            "origin": origin,
+            "destination": dest,
+        })
+    return {"routes": routes_out}
+
+
+@app.get("/plan/{run_id}/{plan_id}/memo.pdf")
+def plan_memo_pdf(run_id: str, plan_id: str):
+    """One-page PDF decision memo (plan Sec 9's "Export decision memo"
+    button) - CSV export already existed on the frontend; this is the
+    PDF half that was previously missing."""
+    from fastapi.responses import Response
+    from src.api.pdf_export import build_memo_pdf
+
+    run_path = os.path.join(_RUNS_DIR, f"{run_id}.json")
+    if not os.path.exists(run_path):
+        raise HTTPException(404, f"run not found: {run_id}")
+    with open(run_path) as f:
+        run_record = json.load(f)
+    if plan_id not in run_record["plans"]:
+        raise HTTPException(404, f"plan not found: {plan_id} in run {run_id}")
+
+    ledger = run_record["plans"][plan_id]["ledger"]
+    pdf_bytes = build_memo_pdf(run_id, plan_id, ledger)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{run_id}_{plan_id}_memo.pdf"'},
+    )

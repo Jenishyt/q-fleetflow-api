@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from src.optimizer.encoding import Scenario
 from src.optimizer.qiea import run_qiea
-from src.optimizer.baselines import random_search, greedy_heuristic, nsga2_pymoo
+from src.optimizer.baselines import random_search, greedy_heuristic, nsga2_pymoo, weighted_ga_pymoo
 from src.models.predict_api import FuelPredictor
 
 N_SEEDS = 10
@@ -52,12 +52,13 @@ def run_protocol(scenario_path: str, out_csv: str):
     scenario = Scenario.from_yaml(scenario_path)
     predictor = FuelPredictor.from_synthetic()
 
-    print(f"Scenario: {scenario.n_genes} genes. Running {N_SEEDS} seeds x 3 stochastic "
-          f"algorithms (QIEA, random search, NSGA-II) + 1 deterministic greedy baseline.\n")
+    print(f"Scenario: {scenario.n_genes} genes. Running {N_SEEDS} seeds x 4 stochastic "
+          f"algorithms (QIEA, random search, NSGA-II, weighted GA) + 1 deterministic "
+          f"greedy baseline.\n")
 
     # --- Pass 1: run everything, collect raw archives ---
-    all_runs = {"qiea": [], "random": [], "nsga2": []}
-    timings = {"qiea": [], "random": [], "nsga2": []}
+    all_runs = {"qiea": [], "random": [], "nsga2": [], "weighted_ga": []}
+    timings = {"qiea": [], "random": [], "nsga2": [], "weighted_ga": []}
 
     for seed in range(N_SEEDS):
         print(f"seed {seed}:", end=" ", flush=True)
@@ -82,7 +83,14 @@ def run_protocol(scenario_path: str, out_csv: str):
         t_nsga2 = time.time() - t0
         all_runs["nsga2"].append(nsga2_archive)
         timings["nsga2"].append(t_nsga2)
-        print(f"nsga2={t_nsga2:.1f}s")
+        print(f"nsga2={t_nsga2:.1f}s", end="  ", flush=True)
+
+        t0 = time.time()
+        wga_archive = weighted_ga_pymoo(scenario, predictor, n_pop=N_POP, n_generations=N_GEN, seed=seed)
+        t_wga = time.time() - t0
+        all_runs["weighted_ga"].append(wga_archive)
+        timings["weighted_ga"].append(t_wga)
+        print(f"weighted_ga={t_wga:.1f}s")
 
     greedy_archive = greedy_heuristic(scenario, predictor)
 
@@ -110,7 +118,7 @@ def run_protocol(scenario_path: str, out_csv: str):
 
     # --- Pass 2: compute metrics per seed per algorithm ---
     rows = []
-    hv_by_algo = {"qiea": [], "random": [], "nsga2": []}
+    hv_by_algo = {"qiea": [], "random": [], "nsga2": [], "weighted_ga": []}
     for algo, runs in all_runs.items():
         for seed, archive in enumerate(runs):
             hv = hypervolume(archive, ref_point)
@@ -139,29 +147,36 @@ def run_protocol(scenario_path: str, out_csv: str):
     print(f"\n{'='*70}")
     print("SUMMARY (mean +/- std across seeds)")
     print(f"{'='*70}")
-    for algo in ["qiea", "random", "nsga2"]:
+    for algo in ["qiea", "random", "nsga2", "weighted_ga"]:
         hvs = np.array(hv_by_algo[algo])
         feas = df[df.algorithm == algo]["feasibility_rate"].to_numpy()
         costs = df[df.algorithm == algo]["best_cost_usd"].to_numpy()
-        print(f"{algo:10s}  HV={hvs.mean():,.0f} +/- {hvs.std():,.0f}   "
+        print(f"{algo:12s}  HV={hvs.mean():,.0f} +/- {hvs.std():,.0f}   "
               f"feasibility={feas.mean()*100:.1f}%   best_cost=${costs.min():,.0f}")
-    print(f"{'greedy':10s}  HV={greedy_hv:,.0f}   "
+    print(f"{'greedy':12s}  HV={greedy_hv:,.0f}   "
           f"feasibility={feasibility_rate(greedy_archive)*100:.0f}%   "
           f"cost=${greedy_archive[0]['obj'][0]:,.0f}")
 
     print(f"\n{'='*70}")
     print("WILCOXON SIGNED-RANK TEST (paired by seed, on hypervolume)")
     print(f"{'='*70}")
-    for other in ["random", "nsga2"]:
+    for other in ["random", "nsga2", "weighted_ga"]:
         a = np.array(hv_by_algo["qiea"])
         b = np.array(hv_by_algo[other])
         try:
             stat, p = wilcoxon(a, b)
             sig = "SIGNIFICANT (p<0.05)" if p < 0.05 else "NOT significant (p>=0.05)"
             direction = "QIEA higher" if a.mean() > b.mean() else f"{other} higher"
-            print(f"QIEA vs {other:8s}: statistic={stat:.2f}  p={p:.4f}  {sig}  ({direction} on mean HV)")
+            print(f"QIEA vs {other:12s}: statistic={stat:.2f}  p={p:.4f}  {sig}  ({direction} on mean HV)")
         except ValueError as ex:
-            print(f"QIEA vs {other:8s}: could not compute ({ex})")
+            print(f"QIEA vs {other:12s}: could not compute ({ex})")
+
+    print(f"\nNote on weighted_ga: it returns a SINGLE point per run (no Pareto front by "
+          f"design), so its 'hypervolume' here is really just the dominated volume of one "
+          f"point - useful for the cost comparison, not a fair apples-to-apples multi-\n"
+          f"objective comparison. This is the demonstration, not a limitation: a single-\n"
+          f"weight GA structurally cannot show a tradeoff curve, which is the whole point\n"
+          f"of building a multi-objective optimizer in the first place.")
 
     print(f"\nWrote {out_csv}")
     return df

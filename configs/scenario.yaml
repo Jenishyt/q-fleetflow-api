@@ -5,18 +5,24 @@ routes:
     slots_per_week: 2
     demand_dwt_per_week: 60000
     fuel_availability: [MDO, VLSFO, LNG]
+    origin_port: Chennai
+    destination_port: Colombo
   - name: R2_long_haul
     distance_nm: 800
     weeks: 4
     slots_per_week: 2
     demand_dwt_per_week: 45000
     fuel_availability: [MDO, VLSFO]
+    origin_port: Chennai
+    destination_port: Singapore
   - name: R3_short_feeder
     distance_nm: 350
     weeks: 4
     slots_per_week: 2
     demand_dwt_per_week: 30000
     fuel_availability: [MDO, VLSFO, LNG, MeOH]
+    origin_port: Chennai
+    destination_port: Cochin
 
 year: 2026
 

@@ -76,6 +76,8 @@ class Route:
     slots_per_week: int
     demand_dwt_per_week: float
     fuel_availability: list[str]
+    origin_port: str | None = None
+    destination_port: str | None = None
 
     @property
     def n_genes(self) -> int:

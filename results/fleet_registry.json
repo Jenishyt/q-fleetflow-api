@@ -1,0 +1,46 @@
+[
+  {
+    "id": "V-7BE80C",
+    "name": "Q-Fleet Container 01",
+    "vessel_class": "container",
+    "capacity_dwt": 40000.0,
+    "design_speed_kn": 22.0,
+    "engine_power_kw": 45000,
+    "max_draft_m": 13.5,
+    "fuel_type": "VLSFO",
+    "status": "Available"
+  },
+  {
+    "id": "V-49A920",
+    "name": "Q-Fleet Bulk 01",
+    "vessel_class": "bulk_carrier",
+    "capacity_dwt": 55000.0,
+    "design_speed_kn": 14.5,
+    "engine_power_kw": 15000,
+    "max_draft_m": 14.0,
+    "fuel_type": "VLSFO",
+    "status": "Available"
+  },
+  {
+    "id": "V-025BC7",
+    "name": "Q-Fleet Tanker 01",
+    "vessel_class": "tanker",
+    "capacity_dwt": 60000.0,
+    "design_speed_kn": 15.0,
+    "engine_power_kw": 18000,
+    "max_draft_m": 15.5,
+    "fuel_type": "VLSFO",
+    "status": "Available"
+  },
+  {
+    "id": "V-11A2AC",
+    "name": "Q-Fleet Cargo 01",
+    "vessel_class": "general_cargo",
+    "capacity_dwt": 15000.0,
+    "design_speed_kn": 16.0,
+    "engine_power_kw": 8000,
+    "max_draft_m": 9.0,
+    "fuel_type": "VLSFO",
+    "status": "Available"
+  }
+]

@@ -141,6 +141,74 @@ def nsga2_pymoo(
     return archive
 
 
+# Normalization scale for the weighted GA below - J1 (cost, ~$10^5),
+# J2 (GHG intensity, ~10^2), and J3 (schedule risk, cost-equivalent
+# hours*price) live on very different scales. Without this, a linear
+# combination is dominated entirely by J1 regardless of the weights
+# chosen. These are rough scenario-typical magnitudes, documented as an
+# assumption the way every other scale-dependent constant in this repo is.
+_WEIGHTED_GA_SCALE = {"J1": 1e5, "J2": 1e2, "J3": 1e3}
+
+
+def weighted_ga_pymoo(
+    scenario: Scenario, predictor: FuelPredictor,
+    n_pop: int = 40, n_generations: int = 150, seed: int = 42,
+    weights: tuple[float, float, float] = (1.0, 1.0, 1.0),
+) -> list[dict]:
+    """Weighted single-objective GA (plan Sec 7.6, the 4th comparator):
+    collapses the 3 objectives into ONE number via w1*J1 + w2*J2 + w3*J3
+    (each normalized to a comparable scale first). Its whole purpose is
+    to demonstrate why multi-objective matters - a single-weight GA can't
+    show a cost/emissions/reliability tradeoff curve, it just gives you
+    ONE point, picked by whoever chose the weights ahead of time.
+
+    Same encoding, same repair, same evaluate_population as everything
+    else - only the search strategy (single-objective GA) and the
+    fitness scalarization differ.
+    """
+    from pymoo.core.problem import Problem
+    from pymoo.algorithms.soo.nonconvex.ga import GA
+    from pymoo.optimize import minimize
+
+    n_genes = scenario.n_genes
+    w1, w2, w3 = weights
+
+    class WeightedProblem(Problem):
+        def __init__(self):
+            super().__init__(n_var=n_genes, n_obj=1, n_constr=0,
+                              xl=0.0, xu=float(N_ALLELES) - 1e-6)
+
+        def _evaluate(self, X, out, *args, **kwargs):
+            plans, deficits_list = [], []
+            for row in X:
+                alleles = np.clip(row.astype(int), 0, N_ALLELES - 1)
+                repaired, deficits = repair(alleles, scenario)
+                plans.append(repaired)
+                deficits_list.append(deficits)
+
+            results = evaluate_population(plans, scenario, predictor, deficits_list)
+            scalarized = np.array([
+                [w1 * (J1 / _WEIGHTED_GA_SCALE["J1"])
+                 + w2 * (J2 / _WEIGHTED_GA_SCALE["J2"])
+                 + w3 * (J3 / _WEIGHTED_GA_SCALE["J3"])]
+                for J1, J2, J3, _ in results
+            ])
+            out["F"] = scalarized
+
+    problem = WeightedProblem()
+    algorithm = GA(pop_size=n_pop)
+    res = minimize(problem, algorithm, ("n_gen", n_generations), seed=seed, verbose=False)
+
+    # GA returns ONE best solution (that's the point being demonstrated -
+    # no Pareto front, just whatever the fixed weights picked)
+    x = res.X if res.X.ndim == 1 else res.X[0]
+    alleles = np.clip(x.astype(int), 0, N_ALLELES - 1)
+    repaired, deficits = repair(alleles, scenario)
+    (J1, J2, J3, ledger), = evaluate_population([repaired], scenario, predictor, [deficits])
+
+    return [{"plan": repaired, "obj": (J1, J2, J3), "ledger": ledger}]
+
+
 if __name__ == "__main__":
     from src.optimizer.encoding import Scenario
     import os

@@ -15,3 +15,4 @@ pydantic>=2.0
 streamlit>=1.38
 plotly>=5.0
 httpx>=0.27  # needed by fastapi's TestClient for tests/test_api.py
+fpdf2>=2.7  # one-page PDF decision memo export
